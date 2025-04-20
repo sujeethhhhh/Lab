@@ -1,0 +1,80 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+// Define ultrasonic sensor pins
+#define TRIGGER_PIN 16
+#define ECHO_PIN 17
+
+// WiFi credentials
+const char* ssid = "Redmi Note 12 Pro 5G";
+const char* password = "redmi1212";
+
+// MQTT broker details
+const char* mqtt_server = "broker.emqx.io";
+const int mqtt_port = 1883;
+
+// MQTT Client ID (as shown in your MQTTBox)
+const char* client_id = "5b81d50b-fd38-4764-8217-062336685962";
+
+// MQTT topic to publish distance data
+const char* topic = "Sensors19";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(TRIGGER_PIN, OUTPUT);
+    pinMode(ECHO_PIN, INPUT);
+
+    // Connect to WiFi
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.println("Connecting to WiFi...");
+    }
+    Serial.println("WiFi connected");
+
+    // Setup MQTT server
+    client.setServer(mqtt_server, mqtt_port);
+}
+
+void reconnect() {
+    while (!client.connected()) {
+        Serial.println("Connecting to MQTT...");
+        if (client.connect(client_id)) {
+            Serial.println("Connected to MQTT broker");
+        } else {
+            Serial.print("Failed, rc=");
+            Serial.print(client.state());
+            Serial.println(" Retrying in 5 seconds...");
+            delay(5000);
+        }
+    }
+}
+
+void loop() {
+    if (!client.connected()) {
+        reconnect();
+    }
+    client.loop();
+
+    // Measure distance
+    digitalWrite(TRIGGER_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIGGER_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIGGER_PIN, LOW);
+    long duration = pulseIn(ECHO_PIN, HIGH);
+    float distance = duration * 0.034 / 2;
+
+    if (distance >= 0 && distance <= 400) {
+        String payload = "Distance: " + String(distance) + " cm";
+        client.publish(topic, payload.c_str());
+        Serial.println(payload);
+    } else {
+        Serial.println("Out of range");
+    }
+
+    delay(1000); // Wait before next measurement
+}
